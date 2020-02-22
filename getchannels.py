@@ -1,11 +1,12 @@
 import sys
 
-# python getchannels.py pos-13E.php 4
+# Example call:
+# python getchannels.py newslave pos-13E.php 4
 
-inputFilename = sys.argv[1] #"pos-13E.php"
-outputFilename = sys.argv[1].replace("php", "m3u") #"13E_satip.m3u"
-server = "newslave"
-source = sys.argv[2] #"4"
+server = sys.argv[1] # newslave
+inputFilename = sys.argv[2] #"pos-13E.php"
+outputFilename = sys.argv[2].replace("php", "m3u") #"13E_satip.m3u"
+source = sys.argv[3] #"4"
 
 
 
