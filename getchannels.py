@@ -149,8 +149,8 @@ for line in f:
 			modulation, rest = rest.split('<', 1)
 			ignore1, ignore2, ignore3, rest = rest.split('>', 3)
 			symrate, rest = rest.split('<', 1)
-			print("Freq: " + frequency + " Pol: " + polarity + " Delsys: " + delsys + " Modulation: " + modulation + " Symbolrate: " + symrate)
-			print(rest)
+			#print("Freq: " + frequency + " Pol: " + polarity + " Delsys: " + delsys + " Modulation: " + modulation + " Symbolrate: " + symrate)
+			#print(rest)
 			newTransponder = 0
 	
 						
