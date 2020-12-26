@@ -18,6 +18,7 @@ channelname = ""
 frequency = ""
 polarity = ""
 delsys = ""
+modulation = ""
 sysmrate = ""
 
 f = open(inputFilename, "r")
@@ -62,7 +63,7 @@ for line in f:
 				# rtsp://@mmslave/?src=4&freq=10971&pol=h&msys=dvbs2&sr=29700&pids=0,501,502,507,503,504,505,502&x_pmt=501
 				description = "#EXTINF:0," + channelname
 				url = "rtsp://@" + server + "/?src=" + source + "&freq=" + frequency + "&pol=" + polarity  
-				url = url + "&msys=" + delsys + "&sr=" + symrate + "&pids=0," + apid
+				url = url + "&msys=" + delsys + "&mtype=" + modulation + "&sr=" + symrate + "&pids=0," + apid
 				for i in opidArray:
 					url = url + "," + i
 				o.write(description + "\n")
@@ -107,7 +108,7 @@ for line in f:
 				# rtsp://@mmslave/?src=4&freq=10971&pol=h&msys=dvbs2&sr=29700&pids=0,501,502,507,503,504,505,502&x_pmt=501
 				description = "#EXTINF:0," + channelname
 				url = "rtsp://@" + server + "/?src=" + source + "&freq=" + frequency + "&pol=" + polarity  
-				url = url + "&msys=" + delsys + "&sr=" + symrate + "&pids=0," + vpid + "," + apid
+				url = url + "&msys=" + delsys + "&mtype=" + modulation + "&sr=" + symrate + "&pids=0," + vpid + "," + apid
 				for i in opidArray:
 					url = url + "," + i
 				o.write(description + "\n")
@@ -144,11 +145,12 @@ for line in f:
 			ignore1, rest = rest.split('>', 1)
 			delsys, rest = rest.split('<', 1)
 			delsys = delsys.replace('-', '')
-			ignore1, ignore2, ignore3, ignore4, rest = rest.split('<', 4)
-			ignore1, rest = rest.split('>', 1)
+			ignore1, ignore2, rest = rest.split('>', 2)			
+			modulation, rest = rest.split('<', 1)
+			ignore1, ignore2, ignore3, rest = rest.split('>', 3)
 			symrate, rest = rest.split('<', 1)
-			#print("Freq: " + frequency + " Pol: " + polarity + " Delsys: " + delsys + " Symbolrate: " + symrate)
-			#print(rest)
+			print("Freq: " + frequency + " Pol: " + polarity + " Delsys: " + delsys + " Modulation: " + modulation + " Symbolrate: " + symrate)
+			print(rest)
 			newTransponder = 0
 	
 						
