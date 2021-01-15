@@ -1,8 +1,8 @@
 # kingofsat2satip
 
 ##### Usage:
-Adapt getchannels.sh to your needs - change satip server name, adapt URLs to satellite positions you receive (check URLs at kingofsat.net), modify pyton script calls regarding your diseqc setup.
-Then just execute the sh script, it downloads php files from kingofsat.net and creates m3u files with satip rtsp URLs. The m3u playlists can be used i.e. with VLC.
+Adapt getchannels.sh to your needs - change SAT>IP server name, adapt URLs to satellite positions you receive (check URLs at kingofsat.net), modify python script calls regarding your DiSEqC setup.
+Then just execute the sh script, it downloads PHP files from kingofsat.net and creates M3U files with SAT>IP RTSP URLs. The M3U playlists can be used i.e. with VLC.
 ```
 sh ./getchannels.sh
 ```
