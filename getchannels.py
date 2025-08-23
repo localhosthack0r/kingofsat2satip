@@ -8,7 +8,7 @@ def parse_transponder_info(frq_table):
     if not head_tr:
         return None
     tds_text = [td.get_text(" ", strip=True) for td in head_tr.find_all("td")]
-    # Frequency (e.g., "11082.25" -> "11082")
+    # Frequency
     freq = None
     for txt in tds_text:
         if re.match(r"^\d{4,5}(\.\d+)?$", txt):
@@ -21,11 +21,13 @@ def parse_transponder_info(frq_table):
         if t in ("H","V"):
             pol = t.lower()
             break
-    # Delivery system
+    # System
     msys = 'dvbs2' if 'DVB-S2' in tds_text else ('dvbs' if 'DVB-S' in tds_text else None)
-    # Modulation type (optional)
-    mtype = next((mod.lower() for mod in ['QPSK','8PSK','16APSK','32APSK','8APSK','16QAM','QAM'] if mod in tds_text), None)
-    # Symbol rate (tolerant regex, handles &nbsp; etc.)
+    # Modulation
+    mtype = next((mod.lower() for mod in 
+                  ['QPSK','8PSK','16APSK','32APSK','8APSK','16QAM','QAM']
+                  if mod in tds_text), None)
+    # Symbolrate
     sr = None
     for txt in tds_text:
         m = re.search(r'(\d{4,5})\s*\d/\d', txt)
@@ -42,7 +44,15 @@ def extract_channel_info(row):
     name = name_td.get_text(" ", strip=True) if name_td else None
     is_radio = row.find("img", {"src": "/radio.gif"}) is not None
 
-    # VPID: first 'td.pid' number != 8191
+    # SID
+    sid = None
+    sid_td = row.find('td', class_='s')
+    if sid_td:
+        m = re.search(r"\d{1,5}", sid_td.get_text(" ", strip=True))
+        if m:
+            sid = m.group(0)
+
+    # VPID (nur für TV relevant)
     vpid = None
     pid_cells = [td for td in tds if 'pid' in (td.get('class') or [])]
     for td in pid_cells:
@@ -54,7 +64,7 @@ def extract_channel_info(row):
         if vpid:
             break
 
-    # APIDs from 'td.apid' and language cell (td without class)
+    # APIDs
     apids = []
     for td in tds:
         classes = td.get('class') or []
@@ -68,31 +78,34 @@ def extract_channel_info(row):
                 if n not in apids:
                     apids.append(n)
 
-    # Other PIDs after first pid cell (PCR/PMT etc.)
-    other_pids = []
-    started = False
+    # Alle weiteren PIDs aus den pid-Zellen
+    all_pids = []
     for td in pid_cells:
-        nums = re.findall(r"\d{2,5}", td.get_text(" ", strip=True))
-        for n in nums:
-            if not started:
-                started = True
-                continue
-            if n not in apids and n != "8191" and n not in other_pids:
-                other_pids.append(n)
-        if not started and nums:
-            started = True
+        for n in re.findall(r"\d{2,5}", td.get_text(" ", strip=True)):
+            if n != "8191" and n not in all_pids:
+                all_pids.append(n)
 
+    # Zusammenbau
     pid_list = []
-    if vpid and not is_radio:
-        pid_list.append(vpid)
-    for a in apids:
-        if a not in pid_list:
-            pid_list.append(a)
-    for op in other_pids:
-        if op not in pid_list:
-            pid_list.append(op)
+    if not is_radio:
+        if vpid:
+            pid_list.append(vpid)
+        for a in apids:
+            if a not in pid_list:
+                pid_list.append(a)
+        for n in all_pids:
+            if n not in pid_list:
+                pid_list.append(n)
+    else:
+        # Radio: APIDs + alle anderen PIDs (inkl. PMT/PCR)
+        for a in apids:
+            if a not in pid_list:
+                pid_list.append(a)
+        for n in all_pids:
+            if n not in pid_list:
+                pid_list.append(n)
 
-    return name, is_radio, pid_list
+    return name, is_radio, pid_list, sid
 
 def main():
     if len(sys.argv) != 4:
@@ -100,7 +113,6 @@ def main():
         sys.exit(1)
     server, inputFilename, source = sys.argv[1], sys.argv[2], sys.argv[3]
 
-    # Output naming: append .m3u if input has uncommon extension; otherwise replace html/php with .m3u
     base, ext = os.path.splitext(inputFilename)
     if ext.lower() in ('.php', '.html', '.htm'):
         outputFilename = base + '.m3u'
@@ -111,10 +123,7 @@ def main():
         soup = BeautifulSoup(f, "html.parser")
 
     entries = []
-
-    # Robust mapping: for each fl table, bind to the nearest preceding frq table
     for fl in soup.find_all("table", class_="fl"):
-        # skip if no channels
         rows = fl.find_all("tr", attrs={"data-channel-id": True})
         if not rows:
             continue
@@ -123,17 +132,20 @@ def main():
         if not tp:
             continue
         for row in rows:
-            name, is_radio, pids = extract_channel_info(row)
+            name, is_radio, pids, sid = extract_channel_info(row)
             if name and pids:
-                entries.append((name, tp, is_radio, pids))
+                entries.append((name, tp, is_radio, pids, sid))
 
     with open(outputFilename, "w", encoding="utf-8") as o:
-        for name, tp, is_radio, pids in entries:
+        for name, tp, is_radio, pids, sid in entries:
             o.write(f"#EXTINF:0,{name}\n")
             url = f"rtsp://@{server}/?src={source}&freq={tp['freq']}&pol={tp['pol']}&msys={tp['msys']}"
             if tp['mtype']:
                 url += f"&mtype={tp['mtype']}"
-            url += f"&sr={tp['sr']}&pids=0," + ",".join(pids)
+            url += f"&sr={tp['sr']}"
+            if sid:
+                url += f"&sid={sid}"
+            url += "&pids=0," + ",".join(pids)
             o.write(url + "\n")
 
     print(f"{len(entries)} Einträge geschrieben -> {outputFilename}")
