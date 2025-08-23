@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Robuster Parser für KingOfSat-ähnliche HTML-Listen.
-Erzeugt eine M3U mit Sat>IP-RTSP-URLs aus einer gespeicherten HTML-Datei.
-
-Aufruf:
-    python getchannels_bs.py <server> <inputfile> <src>
-
-Beispiel:
-    python getchannels_bs.py newslave pos-19.2E 4
-"""
 import sys, os, re
 from bs4 import BeautifulSoup
 
@@ -17,33 +7,28 @@ def parse_transponder_info(frq_table):
     head_tr = frq_table.find("tr", attrs={"data-frequency-id": True})
     if not head_tr:
         return None
-    # Alle Zellen als Text
     tds_text = [td.get_text(" ", strip=True) for td in head_tr.find_all("td")]
-    # Frequenz (z.B. "10727.20" -> "10727")
+    # Frequency (e.g., "11082.25" -> "11082")
     freq = None
     for txt in tds_text:
         if re.match(r"^\d{4,5}(\.\d+)?$", txt):
             freq = txt.split(".", 1)[0]
             break
-    # Polarisation
+    # Polarity
     pol = None
     for td in head_tr.find_all("td"):
         t = td.get_text(" ", strip=True)
-        if t in ("H", "V"):
+        if t in ("H","V"):
             pol = t.lower()
             break
-    # Modulationssystem
+    # Delivery system
     msys = 'dvbs2' if 'DVB-S2' in tds_text else ('dvbs' if 'DVB-S' in tds_text else None)
-    # Modulationstyp (optional)
-    mtype = None
-    for mod in ['QPSK','8PSK','16APSK','32APSK','8APSK','16QAM','QAM']:
-        if mod in tds_text:
-            mtype = mod.lower()
-            break
-    # Symbolrate (aus z.B. "30000 3/4")
+    # Modulation type (optional)
+    mtype = next((mod.lower() for mod in ['QPSK','8PSK','16APSK','32APSK','8APSK','16QAM','QAM'] if mod in tds_text), None)
+    # Symbol rate (tolerant regex, handles &nbsp; etc.)
     sr = None
     for txt in tds_text:
-        m = re.search(r"(\d{4,5})\s*\d\/\d", txt)
+        m = re.search(r'(\d{4,5})\s*\d/\d', txt)
         if m:
             sr = m.group(1)
             break
@@ -53,12 +38,11 @@ def parse_transponder_info(frq_table):
 
 def extract_channel_info(row):
     tds = row.find_all("td")
-    # Kanalname (Spalte mit class 'ch' oder die 3. Zelle)
     name_td = row.find("td", class_="ch") or (tds[2] if len(tds) >= 3 else None)
     name = name_td.get_text(" ", strip=True) if name_td else None
     is_radio = row.find("img", {"src": "/radio.gif"}) is not None
 
-    # VPID = erste 'td.pid' Zahl != 8191
+    # VPID: first 'td.pid' number != 8191
     vpid = None
     pid_cells = [td for td in tds if 'pid' in (td.get('class') or [])]
     for td in pid_cells:
@@ -70,7 +54,7 @@ def extract_channel_info(row):
         if vpid:
             break
 
-    # APIDs: 'td.apid' + ggf. Spalte mit Sprachliste (td ohne class)
+    # APIDs from 'td.apid' and language cell (td without class)
     apids = []
     for td in tds:
         classes = td.get('class') or []
@@ -84,7 +68,7 @@ def extract_channel_info(row):
                 if n not in apids:
                     apids.append(n)
 
-    # Weitere PIDs (PCR/PMT etc.) = übrige 'td.pid' nach dem ersten
+    # Other PIDs after first pid cell (PCR/PMT etc.)
     other_pids = []
     started = False
     for td in pid_cells:
@@ -98,7 +82,6 @@ def extract_channel_info(row):
         if not started and nums:
             started = True
 
-    # Reihenfolge wie im alten Skript: vpid (nur TV), dann apids, dann rest
     pid_list = []
     if vpid and not is_radio:
         pid_list.append(vpid)
@@ -116,6 +99,8 @@ def main():
         print("Aufruf: python getchannels_bs.py <server> <inputfile> <src>")
         sys.exit(1)
     server, inputFilename, source = sys.argv[1], sys.argv[2], sys.argv[3]
+
+    # Output naming: append .m3u if input has uncommon extension; otherwise replace html/php with .m3u
     base, ext = os.path.splitext(inputFilename)
     if ext.lower() in ('.php', '.html', '.htm'):
         outputFilename = base + '.m3u'
@@ -126,20 +111,22 @@ def main():
         soup = BeautifulSoup(f, "html.parser")
 
     entries = []
-    current_tp = None
 
-    # Dokument der Reihe nach durchgehen: 'frq' (Transponderkopf) -> 'fl' (Kanäle)
-    for elem in soup.find_all("table"):
-        classes = elem.get("class", [])
-        if 'frq' in classes:
-            current_tp = parse_transponder_info(elem)
-        elif 'fl' in classes and current_tp:
-            for row in elem.find_all("tr", attrs={"data-channel-id": True}):
-                name, is_radio, pid_list = extract_channel_info(row)
-                if name and pid_list:
-                    entries.append((name, current_tp, is_radio, pid_list))
+    # Robust mapping: for each fl table, bind to the nearest preceding frq table
+    for fl in soup.find_all("table", class_="fl"):
+        # skip if no channels
+        rows = fl.find_all("tr", attrs={"data-channel-id": True})
+        if not rows:
+            continue
+        frq = fl.find_previous("table", class_="frq")
+        tp = parse_transponder_info(frq) if frq else None
+        if not tp:
+            continue
+        for row in rows:
+            name, is_radio, pids = extract_channel_info(row)
+            if name and pids:
+                entries.append((name, tp, is_radio, pids))
 
-    # Schreiben
     with open(outputFilename, "w", encoding="utf-8") as o:
         for name, tp, is_radio, pids in entries:
             o.write(f"#EXTINF:0,{name}\n")
