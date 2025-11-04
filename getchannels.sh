@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # configure SATIP server name/IP address, here
-SERVER="newslave"
+SERVER="newslave:8080"
 #SERVER="192.168.178.42"
 
 # cleanup old files

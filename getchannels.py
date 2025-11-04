@@ -139,7 +139,7 @@ def main():
     with open(outputFilename, "w", encoding="utf-8") as o:
         for name, tp, is_radio, pids, sid in entries:
             o.write(f"#EXTINF:0,{name}\n")
-            url = f"rtsp://@{server}/?src={source}&freq={tp['freq']}&pol={tp['pol']}&msys={tp['msys']}"
+            url = f"http://{server}/?src={source}&freq={tp['freq']}&pol={tp['pol']}&msys={tp['msys']}"
             if tp['mtype']:
                 url += f"&mtype={tp['mtype']}"
             url += f"&sr={tp['sr']}"
